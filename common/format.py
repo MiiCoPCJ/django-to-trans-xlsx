@@ -14,5 +14,5 @@ def foreign_title(sheet,r,length):
 
     c = 1
     for list in list_title:
-        sheet.cell(row=r+length, column=c, value=list)
+        sheet.cell(row=r+length+1, column=c, value=list)
         c = c + 1

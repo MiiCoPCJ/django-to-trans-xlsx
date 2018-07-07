@@ -153,6 +153,9 @@ class Config(models.Model):
 
     objects = ConfigManager()
 
+    class Meta:
+        verbose_name = verbose_name_plural = "Config"
+
     def __str__(self):
         return self.key
 
