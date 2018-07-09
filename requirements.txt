@@ -1,3 +1,7 @@
 openpyxl=2.5.4
 python-docx=0.8.6
 pywin32
+
+# SaveAsPDFandXPS.exe
+# http://download.microsoft.com/download/6/2/5/6259b99f-1abf-4f27-b2a0-ad018b04f0a6/SaveAsPDFandXPS.exe
+# doc转pdf相关插件
