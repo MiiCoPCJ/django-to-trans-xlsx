@@ -179,22 +179,22 @@ def make_docx(pre,file_path,document):
         document.add_paragraph('')
 
 
-        pattern = re.compile(r'\w+\s?=\s?\(.*?\)\n', re.S)
-        chois = re.finditer(pattern, model)
-        for cho in chois:
+        # pattern = re.compile(r'\w+\s?=\s?\(.*?\)\n', re.S)
+        # chois = re.finditer(pattern, model)
+        # for cho in chois:
+        #
+        #     b = cho.group()
+        #     stp = b.split('\n')
+        #     for sp in stp:
+        #         # 选择数据说明
+        #         if re.findall(',', sp):
+        #             document.add_paragraph('     ' + sp, style='Caption')
+        #         else:
+        #             document.add_paragraph(sp, style='Caption')
 
-            b = cho.group()
-            stp = b.split('\n')
-            for sp in stp:
-                # 选择数据说明
-                if re.findall(',', sp):
-                    document.add_paragraph('     ' + sp, style='Caption')
-                else:
-                    document.add_paragraph(sp, style='Caption')
 
-
-        document.add_paragraph('')
-        document.add_paragraph('')
+        # document.add_paragraph('')
+        # document.add_paragraph('')
 
 
 
