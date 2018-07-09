@@ -1,6 +1,10 @@
-import os
+import os, sys
 import re
 from docx import *
+from win32com.client import Dispatch, constants, gencache
+from win32com import client
+
+
 
 # 执行文件的路径
 path = os.path.split(os.path.realpath(__file__))[0]
@@ -22,7 +26,7 @@ def make_docx(pre,file_path,document):
     str = re.sub('"""(.|\n)*?"""','',str)
 
     # 正则 查找
-    pattern = re.compile(r'class\s+\w+\((AbstractBaseUser|models.Model|)\):.*?verbose_name\s?=\s?verbose_name_plural\s?=\s?(\'|")(\w|-)+(\'|")', re.S)
+    pattern = re.compile(r'class\s+\w+\((AbstractBaseUser|models.Model|MPTTModel)\):.*?verbose_name\s?=\s?verbose_name_plural\s?=\s?(\'|")(\w|-)+(\'|")', re.S)
 
     find = re.finditer(pattern,str)
 
@@ -35,7 +39,29 @@ def make_docx(pre,file_path,document):
         # 表名 中文
         data_name_cn = re.search('verbose_name_plural\s?=\s?(\'|")((\w|-)+)(\'|")', model).group(2)
 
-        p = document.add_paragraph(data_name+'('+data_name_cn+')',style='Title')
+        p = document.add_paragraph(data_name+'('+data_name_cn+')',style='Heading 1')
+
+        # 选择字段说明
+        dic = {}
+        i = 0
+        pattern = re.compile(r'\w+\s?=\s?\(.*?\)\n',re.S)
+        chois = re.finditer(pattern,model)
+        for cho in chois:
+
+            b = cho.group()
+            sub = {}
+            lts = re.finditer('\(\s?(\w+)\s?,\s?(\'|")(.*?)(\'|")\s?\)',b)
+            for lt in lts:
+
+                choice_name = lt.group(1)
+                choice_name_cn = lt.group(3)
+
+                choice_no = re.search(choice_name+'\s?=\s?(\d)',model).group(1)
+
+                sub.update({choice_name:[choice_name_cn,choice_no]})
+
+            dic.update({i:sub})
+            i = i + 1
 
 
         # 获取字段部分
@@ -73,13 +99,16 @@ def make_docx(pre,file_path,document):
                 field_type = d.group(2)
 
 
-                if re.search('verbose_name\s?=\s?(\'|")((\w|-)+)(\'|")', d.group(3)):
-                    field_name_cn = re.search('verbose_name\s?=\s?(\'|")((\w|-)+)(\'|")', d.group(3)).group(2)
+                if re.search('verbose_name\s?=\s?(\'|")((\w|-|\/)+)(\'|")', d.group(3)):
+                    field_name_cn = re.search('verbose_name\s?=\s?(\'|")((\w|-|\/)+)(\'|")', d.group(3)).group(2)
                 else:
                     field_name_cn = re.sub('("|\')','',d.group(3).split(',')[0])
 
-                row_cells[0].text = field_name+'('+field_name_cn+')'
-                row_cells[1].text = field_type
+                row_cells[0].text = field_name
+                if field_type == 'Char':
+                    row_cells[1].text = 'varchar'
+                else:
+                    row_cells[1].text = field_type.lower()
 
 
                 if field_type == 'Decimal':
@@ -91,18 +120,42 @@ def make_docx(pre,file_path,document):
                     row_cells[2].text = max_length
 
 
+
+                row_cells[4].text = row_cells[4].text + field_name_cn + '\n'
+
                 # 默认值
+
                 if re.search('default\s?=\s?(.*)(,)?',d.group(3)):
                     dft = re.search('default\s?=\s?(.*)(,)?',d.group(3)).group(1)
                     row_cells[3].text = dft
+                    if dft:
+
+                        f = -1
+                        for i in dic:
+                            if dft in dic[i]:
+                                f = i
+                                row_cells[3].text = dic[i][dft][1]
+
+                        if f>=0:
+                            for choice in dic[f]:
+                                row_cells[4].text = row_cells[4].text + dic[f][choice][1]+' -- '+choice+'  '+dic[f][choice][0]+'\n'
 
                 # 描述
+
                 for dt in d.group(3).split(','):
                     de = re.search('(\w+)=.*',dt)
                     if de:
-                        if de.group(1) != 'verbose_name' and de.group(1)!='max_digits' and de.group(1)!='max_length' and de.group(1)!='default'\
-                                and de.group(1) != 'decimal_places':
-                            row_cells[4].text = dt
+                        # if de.group(1) != 'verbose_name' and de.group(1)!='max_digits' and de.group(1)!='max_length' and de.group(1)!='default'\
+                        #         and de.group(1) != 'decimal_places':
+                        #     row_cells[4].text = row_cells[4].text + dt
+                        if de.group(1) == 'auto_now':
+                            row_cells[4].text = row_cells[4].text + '值:现今时间'
+                        if de.group(1) == 'auto_now_add':
+                            row_cells[4].text = row_cells[4].text + '值:现今时间'
+                        if de.group(1) == 'choices':
+                            row_cells[4].text = row_cells[4].text + dt
+
+
         for sp in stp:
             # 外键处理
             key = re.search('(\w+)\s?=\s?models\.ForeignKey\((.*)\)',sp)
@@ -119,16 +172,23 @@ def make_docx(pre,file_path,document):
 
 
                 des = re.search('\s?' + foreign + '\s?,(.*)', key.group(2)).group(1).strip()
-                row_cells[0].text = key_name
-                row_cells[4].text = '外键  外表('+dl+')  '+des
+                row_cells[0].text = key_name + '_id'
+                row_cells[4].text = '外键  \n外表('+dl+')  \n'
+
 
         document.add_paragraph('')
 
-        for sp in stp:
-            # 选择数据说明
-            if not re.findall('models.',sp):
-                if re.findall(',',sp):
-                    document.add_paragraph('     '+sp, style='Caption')
+
+        pattern = re.compile(r'\w+\s?=\s?\(.*?\)\n', re.S)
+        chois = re.finditer(pattern, model)
+        for cho in chois:
+
+            b = cho.group()
+            stp = b.split('\n')
+            for sp in stp:
+                # 选择数据说明
+                if re.findall(',', sp):
+                    document.add_paragraph('     ' + sp, style='Caption')
                 else:
                     document.add_paragraph(sp, style='Caption')
 
@@ -156,7 +216,35 @@ def loop_res():
             # 开启
             document = Document()
             make_docx(pre,file_path,document)
-            document.save(path + '/../doc/'+pre+'.docx')
+            document.save(path + '/../doc/word/'+pre+'.docx')
+
+            # 转换为ptf
+            doc2pdf(path + '/../doc/word/'+pre+'.docx', path + '/../doc/pdf/'+pre+'.pdf')
+
+
+def doc2pdf(input, output):
+    w = Dispatch('Word.Application')
+    try:
+        # 打开文件
+        doc = w.Documents.Open(input, ReadOnly=1)
+        # 转换文件
+        doc.ExportAsFixedFormat(output, constants.wdExportFormatPDF,
+                                Item=constants.wdExportDocumentWithMarkup, CreateBookmarks = constants.wdExportCreateHeadingBookmarks)
+        return True
+    except Exception as e:
+        print(e)
+        return False
+    finally:
+        w.Quit(constants.wdDoNotSaveChanges)
+
+
+
+
+# Generate all the support we can.
+def GenerateSupport():
+    # enable python COM support for Word 2007
+    # this is generated by: makepy.py -i "Microsoft Word 12.0 Object Library"
+    gencache.EnsureModule('{00020905-0000-0000-C000-000000000046}', 0, 8, 4)
 
 
 if __name__ == "__main__":
@@ -164,9 +252,17 @@ if __name__ == "__main__":
 
 
     # document = Document()
-    # make_docx('users', path+'/../resource/config_models.py', document)
+    # make_docx('users', path+'/../resource/users_models.py', document)
     # document.save(path + '/../doc/model.docx')
+    #
+    # input = path + '/../doc/model.docx'
+    # output = path + '/../doc/models.pdf'
+    # GenerateSupport()
+    # rc = doc2pdf(input, output)
 
+
+
+    # document = Document()
     # styles = document.styles
     # for style in styles:
     #     print("'%s' -- %s" % (style.name, style.type))
